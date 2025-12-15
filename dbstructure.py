@@ -1,4 +1,3 @@
-# models.py
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Float
 from sqlalchemy.orm import relationship
@@ -9,12 +8,9 @@ class ChatSession(Base):
     __tablename__ = "sessions" 
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
+    total_cost = Column(Float, default=0.0)
+    
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
-
-    @property
-    def total_cost(self):
-        return sum(msg.cost for msg in self.messages)
 
 class Message(Base):
     __tablename__ = "messages"

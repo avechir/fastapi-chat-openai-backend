@@ -25,11 +25,6 @@ else:
 PRICE_PER_1M_INPUT = 0.05  
 PRICE_PER_1M_OUTPUT = 0.4
 
-def calculate_cost(input_tokens, output_tokens):
-    input_cost = (input_tokens / 1000000) * PRICE_PER_1M_INPUT
-    output_cost = (output_tokens / 1000000) * PRICE_PER_1M_OUTPUT
-    return input_cost + output_cost
-
 app = FastAPI(title="Chat API")
 
 @app.post("/chats", response_model=schemas.SessionResponse)
@@ -52,6 +47,7 @@ def send_message(session_id: int, msg: schemas.MessageCreate, db: Session = Depe
     user_message = dbstructure.Message(session_id=session_id, role="user", content=msg.content)
     db.add(user_message)
     db.commit()
+    db.refresh(user_message)
 
     # ai answer
     prompt_tokens = 0
@@ -75,18 +71,25 @@ def send_message(session_id: int, msg: schemas.MessageCreate, db: Session = Depe
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"OpenAI Error: {str(e)}")
 
-    total_tokens = prompt_tokens + completion_tokens
-    cost_amount = calculate_cost(prompt_tokens, completion_tokens)
+    input_cost = (prompt_tokens / 1_000_000) * PRICE_PER_1M_INPUT
+    output_cost = (completion_tokens / 1_000_000) * PRICE_PER_1M_OUTPUT
+
+    user_message.tokens_used = prompt_tokens
+    user_message.cost = input_cost
+    db.add(user_message)
 
     # save ai text
     assistant_message = dbstructure.Message(
         session_id=session_id,
         role="assistant",
         content=assistant_text,
-        tokens_used=total_tokens,
-        cost=cost_amount
+        tokens_used=completion_tokens,
+        cost=output_cost
     )
     db.add(assistant_message)
+    current_total = session.total_cost or 0.0
+    session.total_cost = current_total + output_cost + input_cost
+    
     db.commit()
     db.refresh(assistant_message)
     
