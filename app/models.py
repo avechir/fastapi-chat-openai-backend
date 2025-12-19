@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Float
 from sqlalchemy.orm import relationship
 
-from database import Base
+from app.database import Base
 
 class ChatSession(Base):
     __tablename__ = "sessions" 

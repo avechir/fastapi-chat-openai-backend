@@ -4,14 +4,14 @@ from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
 from openai import OpenAI
 from dotenv import load_dotenv
-from database import engine, get_db
-import dbstructure
-import schemas
+from app.database import engine, get_db
+import app.models as models
+import app.schemas as schemas
 
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
 MODEL_NAME = "gpt-5-nano"
-dbstructure.Base.metadata.create_all(bind=engine)
+models.Base.metadata.create_all(bind=engine)
 
 if API_KEY:
     client = OpenAI(api_key=API_KEY)
@@ -29,7 +29,7 @@ app = FastAPI(title="Chat API")
 
 @app.post("/chats", response_model=schemas.SessionResponse)
 def create_session(db: Session = Depends(get_db)):
-    new_session = dbstructure.ChatSession()
+    new_session = models.ChatSession()
     db.add(new_session)
     db.commit()
     db.refresh(new_session)
@@ -39,12 +39,12 @@ def create_session(db: Session = Depends(get_db)):
 def send_message(session_id: int, msg: schemas.MessageCreate, db: Session = Depends(get_db)):
 
     # check session existence
-    session = db.query(dbstructure.ChatSession).filter(dbstructure.ChatSession.id == session_id).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
     # save user text to db
-    user_message = dbstructure.Message(session_id=session_id, role="user", content=msg.content)
+    user_message = models.Message(session_id=session_id, role="user", content=msg.content)
     db.add(user_message)
     db.commit()
     db.refresh(user_message)
@@ -79,7 +79,7 @@ def send_message(session_id: int, msg: schemas.MessageCreate, db: Session = Depe
     db.add(user_message)
 
     # save ai text
-    assistant_message = dbstructure.Message(
+    assistant_message = models.Message(
         session_id=session_id,
         role="assistant",
         content=assistant_text,
@@ -97,7 +97,7 @@ def send_message(session_id: int, msg: schemas.MessageCreate, db: Session = Depe
 
 @app.get("/chats/{session_id}", response_model=schemas.SessionResponse)
 def get_chat_history(session_id: int, db: Session = Depends(get_db)):
-    session = db.query(dbstructure.ChatSession).filter(dbstructure.ChatSession.id == session_id).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
@@ -105,7 +105,7 @@ def get_chat_history(session_id: int, db: Session = Depends(get_db)):
 @app.delete("/chats/{session_id}")
 def delete_session(session_id: int, db: Session = Depends(get_db)):
 
-    session = db.query(dbstructure.ChatSession).filter(dbstructure.ChatSession.id == session_id).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
