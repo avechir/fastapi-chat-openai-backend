@@ -1,29 +1,16 @@
-import os
+
 import time
 from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
-from openai import OpenAI
+
 from dotenv import load_dotenv
 from app.database import engine, get_db
 import app.models as models
 import app.schemas as schemas
+from app.services import chat_service
 
 load_dotenv()
-API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL_NAME = "gpt-5-nano"
 models.Base.metadata.create_all(bind=engine)
-
-if API_KEY:
-    client = OpenAI(api_key=API_KEY)
-    print('there is a key')
-else:
-    print('no key')
-    client = OpenAI(api_key="sk-demo-mode-key")
-
-# client = OpenAI(api_key=API_KEY)
-
-PRICE_PER_1M_INPUT = 0.05  
-PRICE_PER_1M_OUTPUT = 0.4
 
 app = FastAPI(title="Chat API")
 
@@ -47,33 +34,16 @@ def send_message(session_id: int, msg: schemas.MessageCreate, db: Session = Depe
     user_message = models.Message(session_id=session_id, role="user", content=msg.content)
     db.add(user_message)
     db.commit()
-    db.refresh(user_message)
 
     # ai answer
-    prompt_tokens = 0
-    completion_tokens = 0
-    if not API_KEY:
-        time.sleep(1) 
-        assistant_text = f"no key. could be answer for '{msg.content}'"
-        prompt_tokens = 10
-        completion_tokens = 20
-    else:
-        history = [{"role": m.role, "content": m.content} for m in session.messages]
-        try:
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=history
-            )
-            assistant_text = response.choices[0].message.content
-            usage = response.usage
-            prompt_tokens = usage.prompt_tokens         
-            completion_tokens = usage.completion_tokens
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"OpenAI Error: {str(e)}")
-
-    input_cost = (prompt_tokens / 1_000_000) * PRICE_PER_1M_INPUT
-    output_cost = (completion_tokens / 1_000_000) * PRICE_PER_1M_OUTPUT
-
+    history = [{"role": m.role, "content": m.content} for m in session.messages]
+    try:
+        # Отримуємо відповідь і токени
+        assistant_text, prompt_tokens, response_tokens = chat_service.get_response(history)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OpenAI Error: {str(e)}")
+    
+    input_cost, output_cost = chat_service.calculate_cost(prompt_tokens, response_tokens)
     user_message.tokens_used = prompt_tokens
     user_message.cost = input_cost
     db.add(user_message)
@@ -83,7 +53,7 @@ def send_message(session_id: int, msg: schemas.MessageCreate, db: Session = Depe
         session_id=session_id,
         role="assistant",
         content=assistant_text,
-        tokens_used=completion_tokens,
+        tokens_used=response_tokens,
         cost=output_cost
     )
     db.add(assistant_message)
