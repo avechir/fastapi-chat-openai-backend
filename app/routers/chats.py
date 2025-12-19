@@ -6,6 +6,7 @@ import app.models as models
 import app.schemas as schemas
 from app.services import chat_service
 from app.logger import logger
+from typing import List
 
 router = APIRouter()
 
@@ -84,3 +85,13 @@ def delete_session(session_id: int, db: Session = Depends(get_db)):
     db.commit()
     logger.info(f"Session {session_id} has been deleted")
     return {"message": f"Session {session_id} has been deleted."}
+
+@router.get("/chats", response_model=List[schemas.SessionResponse])
+def get_all_sessions(skip: int = 0, limit: int = 15, db: Session = Depends(get_db)):
+    logger.info(f"Fetching sessions list (skip={skip}, limit={limit})")
+    sessions = db.query(models.ChatSession)\
+        .order_by(models.ChatSession.id.desc())\
+        .offset(skip)\
+        .limit(limit)\
+        .all()
+    return sessions
