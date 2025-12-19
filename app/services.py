@@ -1,5 +1,6 @@
 import os
 from openai import OpenAI
+from app.logger import logger
 
 MODEL_NAME = "gpt-5-nano"
 PRICE_PER_1M_INPUT = 0.05  
@@ -10,10 +11,10 @@ class ChatService:
         self.api_key = os.getenv("OPENAI_API_KEY")
         if self.api_key:
             self.client = OpenAI(api_key=self.api_key)
-            print('there is a key')
+            logger.info("ChatService initialized via OpenAI API")
         else:
-            print('no key')
-            self.client = OpenAI(api_key="sk-demo-mode-key")
+            logger.warning("ChatService initialized in DEMO mode. No API key found.")
+            self.client = OpenAI(api_key="sk-demo-mode-key")    
 
     def get_response(self, history: list):
         if not self.api_key:
